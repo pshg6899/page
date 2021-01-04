@@ -5,9 +5,12 @@ import math
 app = Flask(__name__)
 app.secret_key = 'sample_secret'
 
+
 def connectsql():
-    conn = pymysql.connect(host='localhost', user = 'jupyter', passwd = 'jupyter2019!', db = 'regist', charset='utf8')
+    conn = pymysql.connect(host='themiraclesoft.iptime.org', port=13306, user='jupyter', passwd='jupyter2019!',
+                           db='page', charset='utf8')
     return conn
+
 
 @app.route('/')
 # 세션유지를 통한 로그인 유무 확인
@@ -15,13 +18,13 @@ def index():
     if 'username' in session:
         username = session['username']
 
-        return render_template('index.html', logininfo = username)
+        return render_template('index.html', logininfo=username)
     else:
         username = None
-        return render_template('index.html', logininfo = username )
+        return render_template('index.html', logininfo=username)
 
 
-@app.route('/post')
+@app.route('/posts')
 # board테이블의 게시판 제목리스트 역순으로 출력
 def posts():
     page_size = 10
@@ -42,25 +45,23 @@ def posts():
     count = list[0]['count']
     total_page = math.ceil(count / page_size)
 
-
-    #start_no = "1"
-    start_no = str(page_size * (iCurrent_page-1) + 1)
-    end_no = str(page_size * (iCurrent_page))
-
-    istart_no = page_size * (iCurrent_page - 1) + 1
-    iend_no = page_size * (iCurrent_page)
-
+    # start_no = "1"
+    start_no = str(page_size * (iCurrent_page - 1))
+    end_no = str(page_size)
 
     query = "SELECT "
-    query = query + "id, name, title, wdate, view "
-    query = query + "FROM "
-    query = query + "board ORDER BY id DESC LIMIT " + start_no +", " + end_no +";"
+    query = query + "B.id,B.title,A.user_nick,B.wdate,B.view "
+    query = query + "FROM tbl_user A, board B "
+    query = query + "WHERE "
+    query = query + "B.name = A.user_id "
+    query = query + "ORDER BY B.id DESC LIMIT " + start_no + ", " + end_no + ";"
     cursor.execute(query)
     post_list = cursor.fetchall()
     cursor.close()
     conn.close()
 
-    return render_template('post.html', postlist=post_list, logininfo=username, istart_no=istart_no, iend_no=iend_no, page=iCurrent_page)
+    return render_template('post.html', postlist=post_list, logininfo=username, current_page=iCurrent_page)
+
 
 @app.route('/post/content/<id>')
 # 조회수 증가, post페이지의 게시글 클릭시 id와 content 비교 후 게시글 내용 출력
@@ -85,9 +86,10 @@ def content(id):
         conn.commit()
         cursor.close()
         conn.close()
-        return render_template('content.html', data = content, username = username)
+        return render_template('content.html', data=content, username=username)
     else:
-        return render_template ('Error.html')
+        return render_template('Error.html')
+
 
 @app.route('/post/edit/<id>', methods=['GET', 'POST'])
 # GET -> 유지되고있는 username 세션과 현재 접속되어진 id와 일치시 edit페이지 연결
@@ -96,7 +98,7 @@ def edit(id):
     if request.method == 'POST':
         if 'username' in session:
             username = session['username']
- 
+
             edittitle = request.form['title']
             editcontent = request.form['content']
 
@@ -108,7 +110,7 @@ def edit(id):
             conn.commit()
             cursor.close()
             conn.close()
-    
+
             return render_template('editSuccess.html')
     else:
         if 'username' in session:
@@ -121,7 +123,7 @@ def edit(id):
             data = [post[0] for post in cursor.fetchall()]
             cursor.close()
             conn.close()
-           
+
             if username in data:
                 conn = connectsql()
                 cursor = conn.cursor(pymysql.cursors.DictCursor)
@@ -135,7 +137,8 @@ def edit(id):
             else:
                 return render_template('editError.html')
         else:
-            return render_template ('Error.html')
+            return render_template('Error.html')
+
 
 @app.route('/post/delete/<id>')
 # 유지되고 있는 username 세션과 id 일치시 삭제확인 팝업 연결
@@ -152,11 +155,12 @@ def delete(id):
         conn.close()
 
         if username in data:
-            return render_template('delete.html', id = id)
+            return render_template('delete.html', id=id)
         else:
             return render_template('editError.html')
     else:
-        return render_template ('Error.html')
+        return render_template('Error.html')
+
 
 @app.route('/post/delete/success/<id>')
 # 삭제 확인시 id와 일치하는 컬럼 삭제, 취소시 /post 페이지 연결
@@ -169,9 +173,10 @@ def deletesuccess(id):
     conn.commit()
     cursor.close()
     conn.close()
-    
+
     return redirect(url_for('post'))
-    
+
+
 @app.route('/write', methods=['GET', 'POST'])
 # GET -> write 페이지 연결
 # POST -> username, password를 세션으로 불러온 후, form에 작성되어진 title, content를 테이블에 입력
@@ -180,12 +185,12 @@ def write():
         if 'username' in session:
             username = session['username']
             password = session['password']
-            
+
             usertitle = request.form['title']
             usercontent = request.form['content']
 
             conn = connectsql()
-            cursor = conn.cursor() 
+            cursor = conn.cursor()
             query = "INSERT INTO board (name, pass, title, content) values (%s, %s, %s, %s)"
             value = (username, password, usertitle, usercontent)
             cursor.execute(query, value)
@@ -193,15 +198,16 @@ def write():
             cursor.close()
             conn.close()
 
-            return redirect(url_for('post'))
+            return redirect(url_for('posts', current_page='1'))
         else:
             return render_template('errorpage.html')
     else:
         if 'username' in session:
             username = session['username']
-            return render_template ('write.html', logininfo = username)
+            return render_template('write.html', logininfo=username)
         else:
-            return render_template ('Error.html')
+            return render_template('Error.html')
+
 
 @app.route('/logout')
 # username 세션 해제
@@ -209,7 +215,8 @@ def logout():
     session.pop('username', None)
     return redirect(url_for('index'))
 
-@app.route('/login', methods=['GET','POST'])
+
+@app.route('/login', methods=['GET', 'POST'])
 # GET -> 로그인 페이지 연결
 # POST -> 로그인 시 form에 입력된 id, pw를 table에 저장된 id, pw에 비교후 일치하면 로그인, id,pw 세션유지
 def login():
@@ -226,18 +233,19 @@ def login():
         data = cursor.fetchall()
         cursor.close()
         conn.close()
-        
+
         for row in data:
             data = row[0]
-        
+
         if data:
             session['username'] = request.form['id']
             session['password'] = request.form['pw']
-            return render_template('index.html', logininfo = logininfo)
+            return render_template('index.html', logininfo=logininfo)
         else:
             return render_template('loginError.html')
     else:
-        return render_template ('login.html')
+        return render_template('login.html')
+
 
 @app.route('/regist', methods=['GET', 'POST'])
 # GET -> 회원가입 페이지 연결
@@ -256,10 +264,10 @@ def regist():
         value = userid
         cursor.execute(query, value)
         data = (cursor.fetchall())
-        #import pdb; pdb.set_trace()
+        # import pdb; pdb.set_trace()
         if data:
-            conn.rollback() # 이건 안 써도 될 듯
-            return render_template('registError.html') 
+            conn.rollback()  # 이건 안 써도 될 듯
+            return render_template('registError.html')
         else:
             query = "INSERT INTO tbl_user (user_name, user_nick, user_id, user_password, user_comment) values (%s, %s, %s, %s, %s)"
             value = (username, usernick, userid, userpassword, usercomment)
@@ -270,7 +278,8 @@ def regist():
         cursor.close()
         conn.close()
     else:
-        return render_template('regist.html')        
+        return render_template('regist.html')
+
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=8011, debug=True)
